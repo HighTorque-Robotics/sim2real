@@ -1,0 +1,92 @@
+########################################   common   ########################################
+
+num_actions: 12
+
+########################################   rl   ########################################
+
+policy_name: "combined_model_dwaq_v1226.rknn"
+# policy_name: "combined_model_dwaq_v1226.onnx"
+
+dt: 0.001 # simulation time;
+decimation: 10 # rl control frequency = dt * decimation
+rl_spinner_thread_num: 2
+torch_thread_num: 4
+
+num_single_obs: 48
+
+frame_stack: 6
+
+frequency: 0.5
+
+cmd_lin_vel_scale: 5.0
+cmd_ang_vel_scale: 0.25
+rbt_lin_pos_scale: 1.0
+rbt_lin_vel_scale: 0.05
+rbt_ang_vel_scale: 0.25
+
+clip_obs: 18.0
+clip_actions_lower: [-3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3]
+clip_actions_upper: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+
+########################################   pd   ########################################
+
+pd_ctrl_f: 1000 # pd control frequency
+pd_spinner_thread_num: 2
+
+# action_scale: 0.5
+action_scale: 0.25
+
+shut_down_speed: 0.02
+
+map_index: [5, 4, 3, 2, 1, 0, 11, 10, 9, 8, 7, 6]
+
+####################image####################
+motor_direction: [1, 1, -1, -1, 1, 1, 
+                 -1, 1, -1, 1, -1, 1]
+motor_lower_limit: [-3.14, -3.14, -3.14, -3.14, -3.14, -3.14, -3.14, -3.14, -3.14, -3.14, -3.14, -3.14]
+motor_upper_limit: [3.14, 3.14, 3.14, 3.14, 3.14, 3.14, 3.14, 3.14, 3.14, 3.14, 3.14, 3.14]
+
+###################same####################
+# motor_direction: [-1.0, 1.0, -1.0, -1.0, 1.0, 1.0,
+#                   -1.0, 1.0,  1.0,  1.0, 1.0, 1.0]
+# motor_lower_limit: [-0.8, -0.7, -0.4, -1.5, -1.7, -1.7, -0.8, -0.7, -0.4, -1.5, -1.7, -1.7]
+# motor_upper_limit: [ 0.8,  0.7,  1.4,  2.0,  1.7,  1.7,  0.8,  0.7,  1.4,  2.0,  1.7,  1.7]
+
+#cat zero
+# running_kp: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+# running_kd:s [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+# running_kd: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+
+
+#runing robot
+# running_kp: [25,15,15,25,25,15,25,15,15,25,25,15]
+# running_kd: [1.2, 0.8, 0.8, 1.2, 0.8, 0.8, 1.2, 0.8, 0.8, 1.2, 0.8, 0.8]
+running_kp: [60,40,20,60,30,10,60,40,20,60,30,10]
+running_kd: [2.4, 0.8, 0.4, 2.8, 1.6, 0.3, 2.4, 0.8, 0.4, 2.8, 1.6, 0.3]
+
+# running_kp: [8, 8, 8, 
+#              8, 8, 8,
+#              8, 8, 8, 
+#              8, 8, 8]
+# running_kd: [0.25, 0.25, 0.25, 
+#              0.25, 0.25, 0.25,
+#              0.25, 0.25, 0.25, 
+#              0.25, 0.25, 0.25]
+
+shut_down_kp: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+shut_down_kd: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+
+torque_limits: [35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35]
+
+urdf_dof_pos_offset: [-0.25, 0.0, 0.0, 0.65, -0.4, 0.0, -0.25, 0.0, 0.0, 0.65, -0.4, 0.0]
+
+joint_controller_names: ["l_hip_pitch_joint", "l_hip_roll_joint", "l_thigh_joint", "l_calf_joint", "l_ankle_pitch_joint", "l_ankle_roll_joint", "r_hip_pitch_joint", "r_hip_roll_joint", "r_thigh_joint", "r_calf_joint", "r_ankle_pitch_joint", "r_ankle_roll_joint"]
+
+waypoint_files: ["way_point/waypoint_12.boost", 
+"way_point/waypoint_12.boost", 
+"way_point/waypoint_12.boost", 
+"way_point/waypoint_12.boost",  
+"way_point/way_point_falldown_front.boost",  
+"way_point/way_point_falldown_back.boost", 
+"way_point/way_point_backups_left.boost", 
+"way_point/way_point_backups_right.boost"]
