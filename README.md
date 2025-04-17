@@ -5,8 +5,7 @@
 ## 简述
 机器人sim2real部署代码
 ## 运行环境
-ubuntu20.04
-ros:noetic
+ubuntu20.04  ros-noetic
 ## 编译流程
 
 ### 1.下载sim2real\_master
