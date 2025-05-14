@@ -22,6 +22,49 @@ enum Mode
     CUSTOM_MODE
 };
 
+struct GaitParam
+{
+    double frequency = 1.5;
+    double offsets = 0.5;
+    double durations = 0.5;
+    double swing_height = 0.05;
+
+    double gait_indices = 0;
+    double swing_height_indices = 0;
+
+    Eigen::Matrix<double, 2, 1> gait_update(double dt){
+        auto remainder = [](const double& x) -> double {
+            return std::fmod(std::fmod(x, 1.0) + 1.0, 1.0);
+        };
+
+        // gait index update
+        gait_indices = remainder(
+            gait_indices + dt * frequency
+        );
+        swing_height_indices = remainder(
+            swing_height_indices + dt * frequency * 2.0
+        );
+
+        double contact_phase_1 = remainder(gait_indices + offsets + 1);
+        double contact_phase_2 = remainder(gait_indices);
+
+        Eigen::Matrix<double, 2, 1> desired_contact_states = Eigen::Matrix<double, 2, 1>(
+            contact_phase_1 - durations, 
+            contact_phase_2 - durations);
+
+        // lambda：swing height function
+        auto swing_func = [&](double phase, double contact_state) -> double {
+            return swing_height * (std::sin(2.0 * M_PI * phase - 0.5 * M_PI) / 2.0 + 0.5) * (contact_state > 0.0 ? 1.0 : 0.0);
+        };
+
+        Eigen::Matrix<double, 2, 1> swing_height_target = Eigen::Matrix<double, 2, 1>(
+            swing_func(swing_height_indices, desired_contact_states[0]), 
+            swing_func(swing_height_indices, desired_contact_states[1])
+        );
+        return swing_height_target;
+    }
+};
+
 class RL{
 public:
     RL();
@@ -29,6 +72,9 @@ public:
     ~RL();
 
     void init_data();
+
+    void update_observation_ts();
+    void update_action_ts();
 
     void update_observation_dreamwaq();
     void update_action_dreamwaq();
@@ -80,6 +126,34 @@ private:
     double full_step_period;
 
     ros::Publisher action_pub_;
+
+    GaitParam gait_params_; 
+
+    Eigen::Matrix<double, 12, 1> mujoco2Lab(const Eigen::Matrix<double, 12, 1>& x) {
+        const std::array<int, 12> joint_index_mujoco = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+        const std::array<int, 12> joint_index_lab    = {0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11};
+
+        Eigen::Matrix<double, 12, 1> x_lab = Eigen::Matrix<double, 12, 1>::Zero();
+
+        for (int i = 0; i < 12; ++i) {
+            x_lab[joint_index_lab[i]] = x[joint_index_mujoco[i]];
+        }
+    
+        return x_lab;
+    };
+
+    Eigen::Matrix<double, 12, 1> lab2Mujoco(const Eigen::Matrix<double, 12, 1>& actions) {
+        const std::array<int, 12> joint_index_mujoco = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+        const std::array<int, 12> joint_index_lab    = {0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11};
+    
+        Eigen::Matrix<double, 12, 1> actions_mujoco = Eigen::Matrix<double, 12, 1>::Zero();
+    
+        for (int i = 0; i < 12; ++i) {
+            actions_mujoco[joint_index_mujoco[i]] = actions[joint_index_lab[i]];
+        }
+    
+        return actions_mujoco;
+    };
 
 #ifdef PLATFORM_X86_64
     // OpenVINO 相关成员变量

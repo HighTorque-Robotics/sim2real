@@ -106,6 +106,11 @@ namespace hightorque
         }
         obs.input = Eigen::MatrixXd::Zero(1, info.params.num_single_obs * info.params.frame_stack);
 
+        gait_params_.frequency = info.params.frequency;
+        gait_params_.offsets = info.params.offsets;
+        gait_params_.durations = info.params.durations;
+        gait_params_.swing_height = info.params.swing_height;
+
         sub.pd2rl_sub_ = nh.subscribe<sim2real_msg::PD2RL>("pd2rl", 100, &RL::pd2rl_callback, this);
         pub.rl2pd_pub_ = nh.advertise<sim2real_msg::RL2PD>("rl2pd", 100);
 
@@ -446,215 +451,21 @@ namespace hightorque
         Eigen::Vector3d c = q_vec * (q_vec.dot(v) * 2.0);
         return a - b + c;
     }
-    void RL::update_observation_dreamwaq()
-    {
-        #ifdef PLATFORM_X86_64
-        if (ctrl_state == C_STATE_RUNNING)
-        {
-            double time_diff = static_cast<double>((ros::Time::now() - start_time).toSec());
-            obs.observations[10] = std::sin(2 * M_PI * time_diff / info.params.frequency);
-            obs.observations[11] = std::cos(2 * M_PI * time_diff / info.params.frequency);
-        }
-        else if (ctrl_state == C_STATE_STANDBY)
-        {
-            double time_diff = static_cast<double>((ros::Time::now() - start_time).toSec());
-            if (standby_left == 0)
-            {
-                obs.observations[10] = std::sin(2 * M_PI * time_diff / info.params.frequency);
-                if (obs.observations[10] >= 0.95)
-                    standby_left = 1;
-            }
-            else
-                obs.observations[10] = 1;
-            if (standby_right == 0)
-            {
-                obs.observations[11] = std::cos(2 * M_PI * time_diff / info.params.frequency);
-                if (obs.observations[11] <= -0.95)
-                    standby_right = 1;
-            }
-            else
-                obs.observations[11] = -1;
-        }
-        // 0-2 base_ang_vel
-        obs.observations.segment(0, 3) = rbt_state.base_ang_vel * info.params.rbt_ang_vel_scale;
-        Eigen::Vector3d v(0, 0, -1);
-        Eigen::Vector4d qt(rbt_state.quat.x(), rbt_state.quat.y(), rbt_state.quat.z(), rbt_state.quat.w());
-        // 3-5 projected_gravity
-        obs.observations.segment(3, 3) = qr_ty_i(qt, v);
-        // 6,7,8commands
-        obs.observations[6] = command.vx * info.params.cmd_lin_vel_scale;
-        obs.observations[7] = command.vy * info.params.cmd_lin_vel_scale;
-        obs.observations[8] = command.dyaw * info.params.cmd_ang_vel_scale;
-        // 9 standing_command_mask
-        if (std::abs(obs.observations[6]) > 1e-9 || std::abs(obs.observations[7]) > 1e-9 || std::abs(obs.observations[8]) > 1e-9)
-        {
-            obs.observations[9] = 0.0;
-        }
-        else
-        {
-            obs.observations[9] = 0.0;
-            // obs.observations[9] = 1.0;
-        }
 
-        obs.observations.segment(12, 12) = rbt_state.q * info.params.rbt_lin_pos_scale;
-        obs.observations.segment(24, 12) = rbt_state.dq * info.params.rbt_lin_vel_scale;
-        obs.observations.segment(36, 12) = rbt_output.action;
-        #elif defined(PLATFORM_ARM)
-        if (ctrl_state == C_STATE_RUNNING)
-        {
-            double time_diff = static_cast<double>((ros::Time::now() - start_time).toSec());
-            obs.observations[10] = std::sin(2 * M_PI * time_diff / info.params.frequency);
-            obs.observations[11] = std::cos(2 * M_PI * time_diff / info.params.frequency);
-        }
-        else if (ctrl_state == C_STATE_STANDBY)
-        {
-            double time_diff = static_cast<double>((ros::Time::now() - start_time).toSec());
-            if (standby_left == 0)
-            {
-                obs.observations[10] = std::sin(2 * M_PI * time_diff / info.params.frequency);
-                if (obs.observations[10] >= 0.95)
-                    standby_left = 1;
-            }
-            else
-                obs.observations[10] = 1;
-            if (standby_right == 0)
-            {
-                obs.observations[11] = std::cos(2 * M_PI * time_diff / info.params.frequency);
-                if (obs.observations[11] <= -0.95)
-                    standby_right = 1;
-            }
-            else
-                obs.observations[11] = -1;
-        }
-
-        // 0-2 base_ang_vel
-        obs.observations.segment(0, 3) = rbt_state.base_ang_vel * info.params.rbt_ang_vel_scale;
-        Eigen::Vector3d v(0, 0, -1);
-        Eigen::Vector4d qt(rbt_state.quat.x(), rbt_state.quat.y(), rbt_state.quat.z(), rbt_state.quat.w());
-        // 3-5 projected_gravity
-        obs.observations.segment(3, 3) = qr_ty_i(qt, v);
-        // 6,7,8commands
-        obs.observations[6] = command.vx * info.params.cmd_lin_vel_scale;
-        obs.observations[7] = command.vy * info.params.cmd_lin_vel_scale;
-        obs.observations[8] = command.dyaw * info.params.cmd_ang_vel_scale;
-        // 9 standing_command_mask
-        if (std::abs(obs.observations[6]) > 1e-9 || std::abs(obs.observations[7]) > 1e-9 || std::abs(obs.observations[8]) > 1e-9)
-        {
-            obs.observations[9] = 0.0;
-        }
-        else
-        {
-            obs.observations[9] = 0.0;
-            // obs.observations[9] = 1.0;
-        }
-        obs.observations.segment(12, 12) = rbt_state.q * info.params.rbt_lin_pos_scale;
-        obs.observations.segment(24, 12) = rbt_state.dq * info.params.rbt_lin_vel_scale;
-        obs.observations.segment(36, 12) = rbt_output.action;
-        #endif
-
-        for (int i = 0; i < info.params.num_single_obs; ++i)
-        {
-            if (obs.observations[i] > info.params.clip_obs)
-            {
-                obs.observations[i] = info.params.clip_obs;
-            }
-            else if (obs.observations[i] < -info.params.clip_obs)
-            {
-                obs.observations[i] = -info.params.clip_obs;
-            }
-        }
-
-        obs.hist_obs.push_back(obs.observations);
-        obs.hist_obs.pop_front();
-    }
-
-    void RL::update_action_dreamwaq()
-    {
-        #ifdef PLATFORM_X86_64
-
-        for (int i = 0; i < info.params.frame_stack; ++i)
-        {
-            obs.input.block(0, i * info.params.num_single_obs, 1, info.params.num_single_obs) = obs.hist_obs[i].transpose();
-        }
-
-        // 获取输入张量
-        auto input_port = compiled_model.input();
-        ov::Tensor input_tensor = infer_request.get_tensor(input_port);
-        float *input_data = input_tensor.data<float>();
-        for (size_t i = 0; i < input_tensor.get_size(); ++i)
-        {
-            input_data[i] = obs.input(i); // Example data
-        }
-        // double *data_ptr = obs.input.data();// 填充输入张量
-        // std::memcpy(input_tensor.data<float>(), data_ptr, input_tensor.get_byte_size());
-        infer_request.infer();// 执行推理
-        auto output_port = compiled_model.output();// 获取输出张量
-        ov::Tensor output_tensor = infer_request.get_tensor(output_port);
-
-        // 处理输出数据
-        const float *output_data = output_tensor.data<const float>();
-
-        // std::cout << info.params.clip_actions_lower << std::endl;
-        // std::cout << info.params.clip_actions_upper<< std::endl;
-        for (int i = 0; i < info.params.num_actions; ++i)
-        {
-            float lower_bound = static_cast<float>(info.params.clip_actions_lower_ov[i]);
-            float upper_bound = static_cast<float>(info.params.clip_actions_upper_ov[i]);
-            float clamped_value = std::clamp(output_data[i], lower_bound, upper_bound);
-            rbt_output.action[i] = clamped_value;
-            msg.rl2pd_msg.action[i] = clamped_value;
-        }
-        #elif defined(PLATFORM_ARM)
-        // 准备输入数据
-        for (int i = 0; i < info.params.frame_stack; ++i)
-        {
-            obs.input.block(0, i * info.params.num_single_obs, 1, info.params.num_single_obs) = obs.hist_obs[i].transpose();
-        }
-
-        // 获取输入张量
-        std::vector<float> input_data(obs.input.size());
-        for (size_t i = 0; i < obs.input.size(); ++i) {
-            input_data[i] = obs.input(i); // 转换 obs.input 到向量
-        }
-
-        rknn_inputs[0].buf = input_data.data();
-
-        int ret = rknn_inputs_set(ctx, io_num.n_input, rknn_inputs);
-        if (ret != RKNN_SUCC) {
-            std::cerr << "Failed to set RKNN input!"  << ret << std::endl;
-            rknn_destroy(ctx);
-        }
-
-        ret = rknn_run(ctx, nullptr);
-        if (ret != RKNN_SUCC) {
-            std::cerr << "Failed to run RKNN inference!" << std::endl;
-            rknn_destroy(ctx);
-        }
-
-        ret = rknn_outputs_get(ctx, io_num.n_output, rknn_outputs, nullptr);
-        if (ret != RKNN_SUCC) {
-            std::cerr << "Failed to get RKNN output!" << std::endl;
-            rknn_destroy(ctx);
-        }
-        
-        float *output_data = static_cast<float *>(rknn_outputs[0].buf);
-        for (int i = 0; i < info.params.num_actions; ++i) {
-            float lower_bound = static_cast<float>(info.params.clip_actions_lower[i]);
-            float upper_bound = static_cast<float>(info.params.clip_actions_upper[i]);
-            float clamped_value = std::clamp(output_data[i], lower_bound, upper_bound);
-            rbt_output.action[i] = clamped_value;
-            msg.rl2pd_msg.action[i] = clamped_value;
-        }
-        #endif
-    }
-
-    void RL::update_observation_footstep(){
+    void RL::update_observation_ts(){
 #ifdef PLATFORM_X86_64
         if (ctrl_state == C_STATE_RUNNING)
         {
-            double time_diff = static_cast<double>((ros::Time::now() - start_time).toSec());
-            obs.observations[10] = std::sin(2 * M_PI * time_diff / info.params.frequency);
-            obs.observations[11] = std::cos(2 * M_PI * time_diff / info.params.frequency);
+            obs.observations[42] = gait_params_.frequency;
+            obs.observations[43] = gait_params_.offsets;
+            obs.observations[44] = gait_params_.durations;
+            obs.observations[45] = gait_params_.swing_height;
+
+            auto swing_height_target = gait_params_.gait_update(info.params.decimation * info.params.dt);
+            obs.observations[46] = swing_height_target[0];
+            obs.observations[47] = swing_height_target[1];
+            obs.observations[48] = gait_params_.gait_indices;
+            obs.observations[49] = gait_params_.swing_height_indices;
         }
         else if (ctrl_state == C_STATE_STANDBY)
         {
@@ -676,40 +487,36 @@ namespace hightorque
             else
                 obs.observations[11] = -1;
         }
-        // 0-2 base_ang_vel
+
         obs.observations.segment(0, 3) = rbt_state.base_ang_vel * info.params.rbt_ang_vel_scale;
         Eigen::Vector3d v(0, 0, -1);
         Eigen::Vector4d qt(rbt_state.quat.x(), rbt_state.quat.y(), rbt_state.quat.z(), rbt_state.quat.w());
-        // 3-5 projected_gravity
         obs.observations.segment(3, 3) = qr_ty_i(qt, v);
-        // 6,7,8commands
-        obs.observations[6] = command.vx * info.params.cmd_lin_vel_scale;
-        obs.observations[7] = command.vy * info.params.cmd_lin_vel_scale;
-        obs.observations[8] = command.dyaw * info.params.cmd_ang_vel_scale;
-        // 9 standing_command_mask
-        if (std::abs(obs.observations[6]) > 1e-9 || std::abs(obs.observations[7]) > 1e-9 || std::abs(obs.observations[8]) > 1e-9)
-        {
-            obs.observations[9] = 0.0;
-        }
-        else
-        {
-            obs.observations[9] = 0.0;
-            // obs.observations[9] = 1.0;
-        }
 
-        obs.observations.segment(12, 12) = rbt_state.q * info.params.rbt_lin_pos_scale;
-        obs.observations.segment(24, 12) = rbt_state.dq * info.params.rbt_lin_vel_scale;
-        obs.observations.segment(36, 12) = rbt_output.action;
+        auto q_lab = mujoco2Lab(rbt_state.q * info.params.rbt_lin_pos_scale);
+        auto dq_lab = mujoco2Lab(rbt_state.dq * info.params.rbt_lin_vel_scale);
+        auto action_lab = mujoco2Lab(rbt_output.action);
+        obs.observations.segment(6, 12) = q_lab;
+        obs.observations.segment(18, 12) = dq_lab;
+        obs.observations.segment(30, 12) = action_lab;
+
+        obs.observations[50] = command.vx * info.params.cmd_lin_vel_scale;
+        obs.observations[51] = command.vy * info.params.cmd_lin_vel_scale;
+        obs.observations[52] = command.dyaw * info.params.cmd_ang_vel_scale;
 #elif defined(PLATFORM_ARM)
-        phase += 1 / full_step_period;
-
         if (ctrl_state == C_STATE_RUNNING)
         {
-            //double time_diff = static_cast<double>((ros::Time::now() - start_time).toSec());
-            //obs.observations[10] = std::sin(2 * M_PI * time_diff / info.params.frequency);
-            //obs.observations[11] = std::cos(2 * M_PI * time_diff / info.params.frequency);
-            obs.observations[0] = std::sin(2 * M_PI * phase);
-            obs.observations[1] = std::cos(2 * M_PI * phase);
+            obs.observations[42] = gait_params_.frequency;
+            obs.observations[43] = gait_params_.offsets;
+            obs.observations[44] = gait_params_.durations;
+            obs.observations[45] = gait_params_.swing_height;
+
+            auto swing_height_target = gait_params_.gait_update(info.params.decimation * info.params.dt);
+            obs.observations[46] = swing_height_target[0];
+            obs.observations[47] = swing_height_target[1];
+            std::cerr<<swing_height_target.transpose()<<std::endl;
+            obs.observations[48] = gait_params_.gait_indices;
+            obs.observations[49] = gait_params_.swing_height_indices;
         }
         else if (ctrl_state == C_STATE_STANDBY)
         {
@@ -741,15 +548,19 @@ namespace hightorque
                 obs.observations[1] = -1;
             }
         }
-        // 0-2 base_ang_vel
-        obs.observations[2] = command.vx * info.params.cmd_lin_vel_scale;
-        obs.observations[3] = command.vy * info.params.cmd_lin_vel_scale;
-        obs.observations[4] = command.dyaw * info.params.cmd_ang_vel_scale;
-        // 6,7,8commands
-        obs.observations.segment(5, 12) = rbt_state.q * info.params.rbt_lin_pos_scale;
-        obs.observations.segment(17, 12) = rbt_state.dq * info.params.rbt_lin_vel_scale;
-        obs.observations.segment(29, 3) = rbt_state.base_ang_vel * info.params.rbt_ang_vel_scale;
-        obs.observations.segment(32, 3) = rbt_state.eu_ang;
+        obs.observations.segment(0, 3) = rbt_state.base_ang_vel * info.params.rbt_ang_vel_scale;
+        Eigen::Vector3d v(0, 0, -1);
+        Eigen::Vector4d qt(rbt_state.quat.x(), rbt_state.quat.y(), rbt_state.quat.z(), rbt_state.quat.w());
+        obs.observations.segment(3, 3) = qr_ty_i(qt, v);
+        auto q_lab = mujoco2Lab(rbt_state.q * info.params.rbt_lin_pos_scale);
+        auto dq_lab = mujoco2Lab(rbt_state.dq * info.params.rbt_lin_vel_scale);
+        auto action_lab = mujoco2Lab(rbt_output.action);
+        obs.observations.segment(6, 12) = q_lab;
+        obs.observations.segment(18, 12) = dq_lab;
+        obs.observations.segment(30, 12) = action_lab;
+        obs.observations[50] = command.vx * info.params.cmd_lin_vel_scale;
+        obs.observations[51] = command.vy * info.params.cmd_lin_vel_scale;
+        obs.observations[52] = command.dyaw * info.params.cmd_ang_vel_scale;
 #endif
 
         for (int i = 0; i < info.params.num_single_obs; ++i)
@@ -767,7 +578,7 @@ namespace hightorque
         obs.hist_obs.push_back(obs.observations);
         obs.hist_obs.pop_front();
     }
-    void RL::update_action_footstep(){
+    void RL::update_action_ts(){
 #ifdef PLATFORM_X86_64
 
         for (int i = 0; i < info.params.frame_stack; ++i)
@@ -792,16 +603,20 @@ namespace hightorque
         // 处理输出数据
         const float *output_data = output_tensor.data<const float>();
 
-        // std::cout << info.params.clip_actions_lower << std::endl;
-        // std::cout << info.params.clip_actions_upper<< std::endl;
+        Eigen::Matrix<double, 12, 1> actions;
         for (int i = 0; i < info.params.num_actions; ++i)
         {
             float lower_bound = static_cast<float>(info.params.clip_actions_lower_ov[i]);
             float upper_bound = static_cast<float>(info.params.clip_actions_upper_ov[i]);
             float clamped_value = std::clamp(output_data[i], lower_bound, upper_bound);
-            rbt_output.action[i] = clamped_value;
-            msg.rl2pd_msg.action[i] = clamped_value;
+            actions[i] = clamped_value;
         }
+        actions = lab2Mujoco(actions);
+        rbt_output.action = actions;
+        for (int i = 0; i < info.params.num_actions; ++i) {
+            msg.rl2pd_msg.action[i] = actions[i];
+        }
+
 #elif defined(PLATFORM_ARM)
         // 准备输入数据
         for (int i = 0; i < info.params.frame_stack; ++i)
@@ -836,188 +651,25 @@ namespace hightorque
         }
         
         float *output_data = static_cast<float *>(rknn_outputs[0].buf);
+        Eigen::Matrix<double, 12, 1> actions;
         std_msgs::Float64MultiArray policy_msg;
         for (int i = 0; i < info.params.num_actions; ++i) {
             float lower_bound = static_cast<float>(info.params.clip_actions_lower[i]);
             float upper_bound = static_cast<float>(info.params.clip_actions_upper[i]);
             float clamped_value = std::clamp(output_data[i], lower_bound, upper_bound);
-            rbt_output.action[i] = clamped_value;
-            msg.rl2pd_msg.action[i] = clamped_value;
-            policy_msg.data.push_back(clamped_value);
+            actions[i] = clamped_value;
+        }
+        actions = lab2Mujoco(actions);
+        actions[5] = std::clamp(actions[5], -info.params.clip_ankle, info.params.clip_ankle);
+        actions[11] = std::clamp(actions[11], -info.params.clip_ankle, info.params.clip_ankle);
+        
+        rbt_output.action = actions;
+        for (int i = 0; i < info.params.num_actions; ++i) {
+            msg.rl2pd_msg.action[i] = actions[i];
+            policy_msg.data.push_back(actions[i]);
         }
         action_pub_.publish(policy_msg);
 #endif
-    }
-
-    void RL::update_observation_humanoidgym()
-    {
-        #ifdef PLATFORM_X86_64
-        if (ctrl_state == C_STATE_RUNNING)
-        {
-            double time_diff = static_cast<double>((ros::Time::now() - start_time).toSec());
-            obs.observations[0] = std::sin(2 * M_PI * time_diff / info.params.frequency);
-            obs.observations[1] = std::cos(2 * M_PI * time_diff / info.params.frequency);
-        }
-        else if (ctrl_state == C_STATE_STANDBY)
-        {
-            double time_diff = static_cast<double>((ros::Time::now() - start_time).toSec());
-            if (standby_left == 0)
-            {
-                obs.observations[0] = std::sin(2 * M_PI * time_diff / info.params.frequency);
-                if (obs.observations[0] >= 0.95)
-                    standby_left = 1;
-            }
-            else
-                obs.observations[0] = 1;
-            if (standby_right == 0)
-            {
-                obs.observations[1] = std::cos(2 * M_PI * time_diff / info.params.frequency);
-                if (obs.observations[1] <= -0.95)
-                    standby_right = 1;
-            }
-            else
-                obs.observations[1] = -1;
-        }
-        obs.observations[2] = command.vx * info.params.cmd_lin_vel_scale;
-        obs.observations[3] = command.vy * info.params.cmd_lin_vel_scale;
-        obs.observations[4] = command.dyaw * info.params.cmd_ang_vel_scale;
-        obs.observations.segment(5, 12) = rbt_state.q * info.params.rbt_lin_pos_scale;
-        obs.observations.segment(17, 12) = rbt_state.dq * info.params.rbt_lin_vel_scale;
-        obs.observations.segment(29, 12) = rbt_output.action;
-        obs.observations.segment(41, 3) = rbt_state.base_ang_vel * info.params.rbt_ang_vel_scale;
-        obs.observations.segment(44, 3) = rbt_state.eu_ang;
-
-        #elif defined(PLATFORM_ARM)
-        if (ctrl_state == C_STATE_RUNNING)
-        {
-            double time_diff = static_cast<double>((ros::Time::now() - start_time).toSec());
-            obs.observations[0] = std::sin(2 * M_PI * time_diff / info.params.frequency);
-            obs.observations[1] = std::cos(2 * M_PI * time_diff / info.params.frequency);
-        }
-        else if (ctrl_state == C_STATE_STANDBY)
-        {
-            double time_diff = static_cast<double>((ros::Time::now() - start_time).toSec());
-            if (standby_left == 0)
-            {
-                obs.observations[0] = std::sin(2 * M_PI * time_diff / info.params.frequency);
-                if (obs.observations[0] >= 0.95)
-                    standby_left = 1;
-            }
-            else
-                obs.observations[0] = 1;
-            if (standby_right == 0)
-            {
-                obs.observations[1] = std::cos(2 * M_PI * time_diff / info.params.frequency);
-                if (obs.observations[1] <= -0.95)
-                    standby_right = 1;
-            }
-            else
-                obs.observations[1] = -1;
-        }
-        obs.observations[2] = command.vx * info.params.cmd_lin_vel_scale;
-        obs.observations[3] = command.vy * info.params.cmd_lin_vel_scale;
-        obs.observations[4] = command.dyaw * info.params.cmd_ang_vel_scale;
-        obs.observations.segment(5, 12) = rbt_state.q * info.params.rbt_lin_pos_scale;
-        obs.observations.segment(17, 12) = rbt_state.dq * info.params.rbt_lin_vel_scale;
-        obs.observations.segment(29, 12) = rbt_output.action;
-        obs.observations.segment(41, 3) = rbt_state.base_ang_vel * info.params.rbt_ang_vel_scale;
-        obs.observations.segment(44, 3) = rbt_state.eu_ang;
-        #endif
-
-        for (int i = 0; i < info.params.num_single_obs; ++i)
-        {
-            if (obs.observations[i] > info.params.clip_obs)
-            {
-                obs.observations[i] = info.params.clip_obs;
-            }
-            else if (obs.observations[i] < -info.params.clip_obs)
-            {
-                obs.observations[i] = -info.params.clip_obs;
-            }
-        }
-
-        obs.hist_obs.push_back(obs.observations);
-        obs.hist_obs.pop_front();
-    }
-
-    void RL::update_action_humanoidgym()
-    {
-        #ifdef PLATFORM_X86_64
-        for (int i = 0; i < info.params.frame_stack; ++i)
-        {
-            obs.input.block(0, i * info.params.num_single_obs, 1, info.params.num_single_obs) = obs.hist_obs[i].transpose();
-        }
-
-        // 获取输入张量
-        auto input_port = compiled_model.input();
-        ov::Tensor input_tensor = infer_request.get_tensor(input_port);
-        float *input_data = input_tensor.data<float>();
-
-        for (size_t i = 0; i < input_tensor.get_size(); ++i)
-        {
-            input_data[i] = obs.input(i); // Example data
-        }
-        infer_request.infer();// 执行推理
-
-        auto output_port = compiled_model.output();
-        ov::Tensor output_tensor = infer_request.get_tensor(output_port);
-        
-        // 处理输出数据
-        const float *output_data = output_tensor.data<const float>();
-
-        for (int i = 0; i < info.params.num_actions; ++i)
-        {
-            float lower_bound = static_cast<float>(info.params.clip_actions_lower_ov[i]);
-            float upper_bound = static_cast<float>(info.params.clip_actions_upper_ov[i]);
-            float clamped_value = std::clamp(output_data[i], lower_bound, upper_bound);
-            rbt_output.action[i] = clamped_value;
-            msg.rl2pd_msg.action[i] = clamped_value;
-        }
-        
-        #elif defined(PLATFORM_ARM)
-        printf("FUCK IN TO ARM \r\n");
-        // 准备输入数据
-        for (int i = 0; i < info.params.frame_stack; ++i)
-        {
-            obs.input.block(0, i * info.params.num_single_obs, 1, info.params.num_single_obs) = obs.hist_obs[i].transpose();
-        }
-
-        // 获取输入张量
-        std::vector<float> input_data(obs.input.size());
-        for (size_t i = 0; i < obs.input.size(); ++i) {
-            input_data[i] = obs.input(i); // 转换 obs.input 到向量
-        }
-
-        rknn_inputs[0].buf = input_data.data();
-
-        int ret = rknn_inputs_set(ctx, io_num.n_input, rknn_inputs);
-        if (ret != RKNN_SUCC) {
-            std::cerr << "Failed to set RKNN input!"  << ret << std::endl;
-            rknn_destroy(ctx);
-        }
-
-        ret = rknn_run(ctx, nullptr);
-        if (ret != RKNN_SUCC) {
-            std::cerr << "Failed to run RKNN inference!" << std::endl;
-            rknn_destroy(ctx);
-        }
-
-        ret = rknn_outputs_get(ctx, io_num.n_output, rknn_outputs, nullptr);
-        if (ret != RKNN_SUCC) {
-            std::cerr << "Failed to get RKNN output!" << std::endl;
-            rknn_destroy(ctx);
-        }
-        
-        float *output_data = static_cast<float *>(rknn_outputs[0].buf);
-        for (int i = 0; i < info.params.num_actions; ++i) {
-            float lower_bound = static_cast<float>(info.params.clip_actions_lower[i]);
-            float upper_bound = static_cast<float>(info.params.clip_actions_upper[i]);
-            float clamped_value = std::clamp(output_data[i], lower_bound, upper_bound);
-            rbt_output.action[i] = clamped_value;
-            msg.rl2pd_msg.action[i] = clamped_value;
-        }
-        #endif
-        printf("FUCK end \r\n");
     }
 
     void RL::read_orient()
@@ -1066,15 +718,13 @@ namespace hightorque
                 read_orient();
                 if( mode_ == DEFAULT_MODE )
                 {
-                    //update_observation_dreamwaq();
-                    //update_action_dreamwaq();
-                    update_observation_footstep();
-                    update_action_footstep();
+                    update_observation_ts();
+                    update_action_ts();
                 }
                 else if(mode_ == CUSTOM_MODE)
                 {
-                    update_observation_humanoidgym();
-                    update_action_humanoidgym();
+                    update_observation_ts();
+                    update_action_ts();
                 }
                 break;
             case C_STATE_FORCE_SHUT_DOWN:

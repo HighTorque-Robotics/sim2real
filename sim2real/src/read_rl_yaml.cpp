@@ -37,6 +37,12 @@ void RL_YamlInfo::read_yaml(const std::string& load_path){
     this->params.frame_stack = config["frame_stack"].as<int>();
 
     this->params.frequency = config["frequency"].as<double>();
+    this->params.offsets = config["offsets"].as<double>();
+    this->params.durations = config["durations"].as<double>();
+    this->params.swing_height = config["swing_height"].as<double>();
+            std::cerr<<this->params.swing_height<<std::endl;
+            exit(0);
+
 
     this->params.cmd_lin_vel_scale = config["cmd_lin_vel_scale"].as<double>();
     this->params.cmd_ang_vel_scale = config["cmd_ang_vel_scale"].as<double>();
@@ -78,6 +84,11 @@ void RL_YamlInfo::read_yaml(){
     this->params.frame_stack = config["frame_stack"].as<int>();
 
     this->params.frequency = config["frequency"].as<double>();
+    this->params.offsets = config["offsets"].as<double>();
+    this->params.durations = config["durations"].as<double>();
+    this->params.swing_height = config["swing_height"].as<double>();
+
+    this->params.clip_ankle = config["clip_ankle"].as<double>();
 
     this->params.cmd_lin_vel_scale = config["cmd_lin_vel_scale"].as<double>();
     this->params.cmd_ang_vel_scale = config["cmd_ang_vel_scale"].as<double>();

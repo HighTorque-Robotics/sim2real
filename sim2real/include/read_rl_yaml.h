@@ -20,6 +20,11 @@ struct RL_ModelParams{
     int frame_stack;
 
     double frequency;
+    double offsets;
+    double durations;
+    double swing_height;
+
+    double clip_ankle;
 
     double cmd_lin_vel_scale;
     double cmd_ang_vel_scale;

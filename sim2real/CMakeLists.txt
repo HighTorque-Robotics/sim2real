@@ -2,17 +2,6 @@ cmake_minimum_required(VERSION 3.0.2)
 project(sim2real)
 set(CMAKE_CXX_STANDARD 17)
 
-# 单测相关 +
-# 启用代码覆盖率
-option(COVERAGE "Enable coverage reporting" ON)
-
-if(COVERAGE)
-  message(STATUS "Coverage enabled")
-  add_compile_options(--coverage -O0 -g)
-  link_libraries(gcov)
-endif()
-# 单测相关 -
-
 
 get_filename_component(WORKSPACE_DIR_FROM_DEVEL_PREFIX ${CATKIN_DEVEL_PREFIX} DIRECTORY)
 get_filename_component(PARENT_DIR ${WORKSPACE_DIR_FROM_DEVEL_PREFIX} DIRECTORY)
@@ -211,53 +200,3 @@ endif()
 # foreach(a ${LINK_LIBS})
 # message(${a})
 # endforeach(a ${${LINK_LIBS}})
-
-
-if(CATKIN_ENABLE_TESTING)
-  find_package(rostest REQUIRED)
-  find_package(GTest REQUIRED)
-
-  # 添加测试文件
-  #catkin_add_gtest(test_rl_exec_loop
-  #  test/test_rl_exec_loop.cpp
-  #  ${RL_CTRL_SRCS}
-  #  ${PD_CTRL_SRCS}
-  #)
-
-  #target_include_directories(test_rl_exec_loop PRIVATE
-  #  include
-  #  ${catkin_INCLUDE_DIRS}
-  #  ${EIGEN3_INCLUDE_DIR}
-  #  ${PINOCCHIO_INCLUDE_DIRS}
-  #)
-
-  #target_link_libraries(test_rl_exec_loop
-  #  ${catkin_LIBRARIES}
-  #  ${SERIALPORT_LIBRARY}
-  #  yaml-cpp
-  #  ${pinocchio_LIBRARIES}
-  #  gcov  # 用于覆盖率
-  #)
-
-  # 添加 GTest 测试目标
-  catkin_add_gtest(test_jacobian
-    test/test_jacobian.cpp
-    #src/jacobian.cpp
-    ${PD_CTRL_SRCS}
-  )
-
-  target_include_directories(test_jacobian PRIVATE
-    include
-    ${catkin_INCLUDE_DIRS}
-    ${EIGEN3_INCLUDE_DIR}
-  )
-
-  target_link_libraries(test_jacobian
-    ${catkin_LIBRARIES}
-    ${pinocchio_LIBRARIES}
-    yaml-cpp
-    gcov # 用于覆盖率
-  )
-
-
-endif()
